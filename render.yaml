@@ -1,8 +1,7 @@
 services:
   - type: web
-    name: toprent-auto
+    name: toprent-api
     env: node
-    buildCommand: "npm install"
-    startCommand: "node index.js"
     plan: free
-    autoDeploy: true
+    buildCommand: npm install
+    startCommand: node index.js
