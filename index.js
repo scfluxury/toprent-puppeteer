@@ -1,23 +1,35 @@
 const express = require('express');
 const puppeteer = require('puppeteer');
-process.env.PUPPETEER_EXECUTABLE_PATH = puppeteer.executablePath();
 const bodyParser = require('body-parser');
 
 const app = express();
 app.use(bodyParser.json());
 
+process.env.PUPPETEER_EXECUTABLE_PATH = puppeteer.executablePath();
+
 app.post('/toprent-auto', async (req, res) => {
-  const { pickupCity, dropoffCity, pickupDate, dropoffDate, requestedKm, requestedModel, pickupTime, dropoffTime } = req.body;
+  const {
+    pickupCity,
+    dropoffCity,
+    pickupDate,
+    dropoffDate,
+    pickupTime,
+    dropoffTime,
+    requestedKm,
+    requestedModel
+  } = req.body;
 
   const browser = await puppeteer.launch({
     headless: true,
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
 
   try {
     const page = await browser.newPage();
-    await page.goto('https://cloud.toprent.app', { waitUntil: 'networkidle2' });
 
+    // LOGIN
+    await page.goto('https://cloud.toprent.app', { waitUntil: 'networkidle2' });
     await page.type('input[type="email"]', 'tommaso@scaffei.com');
     await page.type('input[type="password"]', 'Luxury23!');
     await Promise.all([
@@ -25,68 +37,75 @@ app.post('/toprent-auto', async (req, res) => {
       page.waitForNavigation({ waitUntil: 'networkidle2' })
     ]);
 
-    // Vai su calculator
+    // Vai al calculator
     await page.goto('https://cloud.toprent.app/calculator', { waitUntil: 'networkidle2' });
 
-    // Inserisci date e orari
+    // Aspetta che i campi siano caricati
     await page.waitForSelector('input[name="start_date"]');
-    await page.evaluate(({ pickupDate, pickupTime }) => {
+
+    // Inserisci date/ora
+    await page.evaluate(({ pickupDate, pickupTime, dropoffDate, dropoffTime }) => {
       document.querySelector('input[name="start_date"]').value = pickupDate;
       if (pickupTime) document.querySelector('input[name="start_time"]').value = pickupTime;
-    }, { pickupDate, pickupTime });
-
-    await page.evaluate(({ dropoffDate, dropoffTime }) => {
       document.querySelector('input[name="end_date"]').value = dropoffDate;
       if (dropoffTime) document.querySelector('input[name="end_time"]').value = dropoffTime;
-    }, { dropoffDate, dropoffTime });
+    }, { pickupDate, pickupTime, dropoffDate, dropoffTime });
 
-    // Mostra veicoli
+    // Mostra veicoli + seleziona tutti
     await Promise.all([
-      page.click('button:has-text("Show all vehicles")'),
+      page.click('button:has-text("Show all vehicles")').catch(() => {}),
       page.waitForTimeout(2000)
     ]);
-
-    await page.click('button:has-text("Select all availables")');
+    await page.click('button:has-text("Select all availables")').catch(() => {});
     await page.waitForTimeout(1000);
 
-    // Delivery: riconsegna e consegna
+    // Aggiungi delivery se necessario
     if (pickupCity && pickupCity.toLowerCase() !== 'milano') {
-      await page.click('button:has-text("Add delivery")');
+      await page.click('button:has-text("Add delivery")').catch(() => {});
       await page.type('input[placeholder="Start"]', 'Milano');
       await page.type('input[placeholder="End"]', pickupCity);
     }
 
     if (dropoffCity && dropoffCity.toLowerCase() !== 'milano') {
-      await page.click('button:has-text("Add delivery")');
+      await page.click('button:has-text("Add delivery")').catch(() => {});
       await page.type('input[placeholder="Start"]', dropoffCity);
       await page.type('input[placeholder="End"]', 'Milano');
     }
 
-    // Conferma e copia risultato
-    await page.click('button:has-text("Confirm")');
+    // Conferma e copia preventivo
+    await page.click('button:has-text("Confirm")').catch(() => {});
     await page.waitForTimeout(1000);
-    await page.click('button:has-text("Copy result")');
+    await page.click('button:has-text("Copy result")').catch(() => {});
     await page.waitForTimeout(1000);
 
-    // Leggi risultato (clipboard virtuale → simuliamo come textarea)
+    // Leggi risultato (da textarea o <pre>)
     const result = await page.evaluate(() => {
-      const textarea = document.querySelector('textarea') || document.querySelector('pre');
-      return textarea ? textarea.innerText : 'Nessun risultato trovato.';
+      const el = document.querySelector('textarea') || document.querySelector('pre');
+      return el ? el.innerText : '❌ Nessun risultato disponibile';
     });
 
     await browser.close();
 
     res.send({
       message: "✅ Preventivo completato",
-      input: { pickupCity, dropoffCity, pickupDate, dropoffDate, requestedKm, requestedModel },
-      result
+      parsedInput: {
+        pickupCity,
+        dropoffCity,
+        pickupDate,
+        dropoffDate,
+        pickupTime,
+        dropoffTime,
+        requestedKm,
+        requestedModel
+      },
+      preventivo: result
     });
 
-  } catch (error) {
+  } catch (err) {
     await browser.close();
     res.status(500).send({
       error: 'Errore durante il preventivo',
-      details: error.message
+      details: err.message
     });
   }
 });
