@@ -16,10 +16,8 @@ app.post('/toprent-auto', async (req, res) => {
   try {
     const page = await browser.newPage();
 
-    // Vai alla pagina di login TopRent
     await page.goto('https://cloud.toprent.app/', { waitUntil: 'networkidle2' });
 
-    // Compila login
     await page.type('input[type="email"]', 'tommaso@scaffei.com');
     await page.type('input[type="password"]', 'Luxury23!');
 
@@ -28,15 +26,14 @@ app.post('/toprent-auto', async (req, res) => {
       page.waitForNavigation({ waitUntil: 'networkidle2' })
     ]);
 
-    // Vai a una sezione del gestionale (puoi cambiarla)
     await page.goto('https://cloud.toprent.app/vehicles', { waitUntil: 'networkidle2' });
 
-    // Screenshot (debug)
     await page.screenshot({ path: 'logged_in.png' });
 
-    // Output di prova
+    await browser.close();
+
     res.send({
-      message: "✅ Login effettuato con successo su cloud.toprent.app",
+      message: "✅ Login effettuato",
       parsedInput: {
         pickupCity,
         dropoffCity,
@@ -46,12 +43,10 @@ app.post('/toprent-auto', async (req, res) => {
         requestedModel
       }
     });
-
-    await browser.close();
   } catch (err) {
     await browser.close();
     res.status(500).send({
-      error: 'Errore durante scraping',
+      error: 'Errore durante il login o scraping',
       details: err.message
     });
   }
