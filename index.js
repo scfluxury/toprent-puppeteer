@@ -1,10 +1,10 @@
 const express = require('express');
-const puppeteer = require('puppeteer');
+const chromium = require('chrome-aws-lambda');
+const puppeteer = require('puppeteer-core');
 const bodyParser = require('body-parser');
-const app = express();
 
+const app = express();
 app.use(bodyParser.json());
-process.env.PUPPETEER_EXECUTABLE_PATH = puppeteer.executablePath();
 
 app.post('/toprent-auto', async (req, res) => {
   const {
@@ -19,15 +19,16 @@ app.post('/toprent-auto', async (req, res) => {
   } = req.body;
 
   const browser = await puppeteer.launch({
-    headless: true,
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    args: chromium.args,
+    executablePath: await chromium.executablePath,
+    headless: chromium.headless,
+    defaultViewport: chromium.defaultViewport
   });
 
   try {
     const page = await browser.newPage();
 
-    // Login
+    // LOGIN
     await page.goto('https://cloud.toprent.app', { waitUntil: 'networkidle2' });
     await page.type('input[type="email"]', 'tommaso@scaffei.com');
     await page.type('input[type="password"]', 'Luxury23!');
@@ -36,11 +37,10 @@ app.post('/toprent-auto', async (req, res) => {
       page.waitForNavigation({ waitUntil: 'networkidle2' })
     ]);
 
-    // Vai su calculator
+    // Vai al calculator
     await page.goto('https://cloud.toprent.app/calculator', { waitUntil: 'networkidle2' });
     await page.waitForSelector('input[name="start_date"]');
 
-    // Inserisci date e orari
     await page.evaluate(({ pickupDate, pickupTime, dropoffDate, dropoffTime }) => {
       document.querySelector('input[name="start_date"]').value = pickupDate;
       if (pickupTime) document.querySelector('input[name="start_time"]').value = pickupTime;
@@ -48,13 +48,11 @@ app.post('/toprent-auto', async (req, res) => {
       if (dropoffTime) document.querySelector('input[name="end_time"]').value = dropoffTime;
     }, { pickupDate, pickupTime, dropoffDate, dropoffTime });
 
-    // Mostra veicoli e seleziona tutti
     await page.click('button:has-text("Show all vehicles")').catch(() => {});
     await page.waitForTimeout(1500);
     await page.click('button:has-text("Select all availables")').catch(() => {});
     await page.waitForTimeout(1000);
 
-    // Aggiungi delivery se necessario
     if (pickupCity && pickupCity.toLowerCase() !== 'milano') {
       await page.click('button:has-text("Add delivery")').catch(() => {});
       await page.type('input[placeholder="Start"]', 'Milano');
@@ -67,15 +65,12 @@ app.post('/toprent-auto', async (req, res) => {
       await page.type('input[placeholder="End"]', 'Milano');
     }
 
-    // Conferma
     await page.click('button:has-text("Confirm")').catch(() => {});
     await page.waitForTimeout(1000);
 
-    // Calcola
     await page.click('button:has-text("Calculate")').catch(() => {});
     await page.waitForTimeout(1500);
 
-    // Inserisci km se specificati
     if (requestedKm) {
       await page.evaluate((km) => {
         const kmInput = document.querySelector('input[placeholder="Included km"]');
@@ -83,11 +78,9 @@ app.post('/toprent-auto', async (req, res) => {
       }, requestedKm);
     }
 
-    // Copia il risultato
     await page.click('button:has-text("Copy result")').catch(() => {});
     await page.waitForTimeout(1000);
 
-    // Estrai il risultato
     const result = await page.evaluate(() => {
       const el = document.querySelector('textarea') || document.querySelector('pre');
       return el ? el.innerText : '❌ Nessun risultato disponibile';
