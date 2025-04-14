@@ -1,5 +1,6 @@
 const express = require('express');
 const puppeteer = require('puppeteer');
+process.env.PUPPETEER_EXECUTABLE_PATH = puppeteer.executablePath();
 const bodyParser = require('body-parser');
 
 const app = express();
